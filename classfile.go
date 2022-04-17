@@ -171,7 +171,9 @@ func main() {
 	cps := read_CP_INFO(b, cp)
 	fmt.Println("CPS:", cps)
 
-	fmt.Println("access_flags:", read_u2(b))
+	acc_flags := read_u2(b)
+	fmt.Printf("%X\n", acc_flags)
+	fmt.Println("access_flags:", acc_flags, str_access_flag(acc_flags, "class"))
 	fmt.Println("this_class:", read_u2(b))
 	fmt.Println("super_class:", read_u2(b))
 	fmt.Println("interfaces_count:", read_u2(b))
@@ -257,4 +259,64 @@ type ATTRIBUTE_INFO struct {
 	attribute_name_index uint16  //u2
 	attribute_length     uint32  //u4
 	info                 []uint8 //u1
+}
+
+func str_access_flag(x uint16, opt string) string {
+	result := ""
+	if (x & 0x0001) != 0 { //ACC_PUBLIC	0x0001
+		result += "public "
+	}
+	if (x & 0x0002) != 0 { //ACC_PRIVATE	0x0002
+		result += "private "
+	}
+	if (x & 0x0004) != 0 { //ACC_PROTECTED	0x0004
+		result += "protected "
+	}
+	if (x & 0x0008) != 0 { //ACC_STATIC	0x0008
+		result += "static "
+	}
+	if (x & 0x0010) != 0 { //ACC_FINAL	0x0010
+		result += "final "
+	}
+	if (x & 0x0100) != 0 { //ACC_NATIVE
+		result += "native "
+	}
+	if (x & 0x0200) != 0 { //ACC_INTERFACE
+		result += "interface "
+	}
+	if (x & 0x0400) != 0 { //ACC_ABSTRACT
+		result += "abstract "
+	}
+	if (x & 0x0800) != 0 { //ACC_STRICT
+		result += "strict "
+	}
+	if (x & 0x1000) != 0 { //ACC_SYNTHETIC
+		result += "synthetic "
+	}
+	if (x & 0x2000) != 0 { //ACC_ANNOTATION
+		result += "annotation "
+	}
+	if (x & 0x4000) != 0 { //ACC_ENUM
+		result += "enum "
+	}
+	///////////////////////////////////////
+	if (x&0x0080) != 0 && (opt == "field") { //ACC_TRANSIENT
+		result += "transient "
+	}
+	if (x&0x0040) != 0 && (opt == "field") { //ACC_VOLATILE
+		result += "volatile "
+	}
+	if (x&0x0020) != 0 && (opt == "class") { //ACC_SUPER
+		result += "super "
+	}
+	if (x&0x0020) != 0 && (opt == "m_a_p") { //ACC_SYNCRONIZED
+		result += "super "
+	}
+	if (x&0x0040) != 0 && (opt == "m_a_p") { //ACC_BRIDGE
+		result += "bridge "
+	}
+	if (x&0x0080) != 0 && (opt == "m_a_p") { //ACC_VARARGS
+		result += "varargs "
+	}
+	return result
 }
