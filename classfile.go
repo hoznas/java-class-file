@@ -34,7 +34,7 @@ func read_CAFEBABE(bu *bytes.Buffer) string {
 	b := bu.Next(1)
 	c := bu.Next(1)
 	d := bu.Next(1)
-	return fmt.Sprintf("%X%X%X%X\n", a, b, c, d)
+	return fmt.Sprintf("%X%X%X%X", a, b, c, d)
 }
 func read(b *bytes.Buffer, n int) []uint8 {
 	return b.Next(n)
@@ -79,8 +79,11 @@ func (cp CP_INFO) String() string {
 	for _, i := range cp.infos {
 		str += fmt.Sprintf("[%s:%v]", i.name, i.val)
 	}
-	return str + ">"
-
+	if cp.tag == uint8(1) {
+		return str + string(cp.infos[1].val) + ">"
+	} else {
+		return str + ">"
+	}
 }
 
 func read_cp(b *bytes.Buffer) CP_INFO {
@@ -151,9 +154,7 @@ func read_cp(b *bytes.Buffer) CP_INFO {
 func read_CP_INFO(b *bytes.Buffer, count uint16) []CP_INFO {
 	result := []CP_INFO{}
 	for i := uint16(1); i < count; i++ {
-		fmt.Println("**************")
 		cp := read_cp(b)
-		fmt.Println(i, cp)
 		result = append(result, cp)
 	}
 	return result
@@ -169,7 +170,9 @@ func main() {
 	cp := read_u2(b)
 	fmt.Println("CONSTANT_POOL:", cp)
 	cps := read_CP_INFO(b, cp)
-	fmt.Println("CPS:", cps)
+	for i := 0; i < len(cps); i++ {
+		fmt.Println("CPS:", i+1, cps[i])
+	}
 
 	acc_flags := read_u2(b)
 	fmt.Printf("%X\n", acc_flags)
@@ -182,17 +185,22 @@ func main() {
 	// read_fields()
 	method_count := read_u2(b)
 	fmt.Println("methods_count:", method_count)
-	read_METHOD_INFO(b, method_count)
+	ms := read_METHOD_INFO(b, method_count)
+	for i := 0; i < len(ms); i++ {
+		fmt.Printf("method[%d]:%s\n", i, ms[i])
+	}
 	attributes_count := read_u2(b)
 	fmt.Println("attributes_count:", attributes_count)
-	read_ATTRIBUTE(b, attributes_count)
+	as := read_ATTRIBUTE(b, attributes_count)
+	for i := 0; i < len(as); i++ {
+		fmt.Printf("attr[%d]:%s\n", i, as[i])
+	}
+	//fmt.Println(read_u2(b))
 }
 func read_METHOD_INFO(b *bytes.Buffer, count uint16) []METHOD_INFO {
 	result := []METHOD_INFO{}
 	for i := uint16(0); i < count; i++ {
-		fmt.Println("**************")
 		m := read_method(b)
-		fmt.Println(i, m)
 		result = append(result, m)
 	}
 	return result
@@ -211,9 +219,7 @@ func read_method(b *bytes.Buffer) METHOD_INFO {
 func read_ATTRIBUTE(b *bytes.Buffer, count uint16) []ATTRIBUTE_INFO {
 	result := []ATTRIBUTE_INFO{}
 	for i := uint16(0); i < count; i++ {
-		fmt.Println("**************")
 		attr := read_attibute(b)
-		fmt.Println(attr)
 		result = append(result, attr)
 	}
 	return result
@@ -221,9 +227,7 @@ func read_ATTRIBUTE(b *bytes.Buffer, count uint16) []ATTRIBUTE_INFO {
 func read_attibute(b *bytes.Buffer) ATTRIBUTE_INFO {
 	var attr ATTRIBUTE_INFO
 	attr.attribute_name_index = read_u2(b)
-	fmt.Println("attr.attribute_name_index", attr.attribute_name_index)
 	attr.attribute_length = read_u4(b)
-	fmt.Println("attr.attribute_length", attr.attribute_length)
 	attr.info = read_uint32(b, attr.attribute_length)
 	return attr
 }
@@ -255,10 +259,31 @@ type METHOD_INFO struct {
 	attribute_info   []ATTRIBUTE_INFO
 }
 
+func (m METHOD_INFO) String() string {
+	result := "<"
+	result += "flags:" + str_access_flag(m.access_flags, "m_a_p") + " "
+	result += fmt.Sprintf("name_idx:%d ", m.name_index)
+	result += fmt.Sprintf("desc_idx:%d ", m.descriptor_index)
+	var i uint16 = 0
+	for i = 0; i < m.attributes_count; i++ {
+		result += fmt.Sprintf("attr[%d]:%s ", i, m.attribute_info[i])
+	}
+	return result + ">"
+}
+
 type ATTRIBUTE_INFO struct {
 	attribute_name_index uint16  //u2
 	attribute_length     uint32  //u4
 	info                 []uint8 //u1
+}
+
+func (a ATTRIBUTE_INFO) String() string {
+	result := "<"
+	result += fmt.Sprintf("attribute_name_index:%d ", a.attribute_name_index)
+	for i := 0; i < len(a.info); i++ {
+		result += fmt.Sprintf("%02X ", a.info[i])
+	}
+	return result + ">"
 }
 
 func str_access_flag(x uint16, opt string) string {
