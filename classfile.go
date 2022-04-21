@@ -7,6 +7,7 @@ import (
 	"os"
 )
 
+///// file io / byte io /////
 func file_read(fname string) *bytes.Buffer {
 	fp, err := os.Open(fname)
 	if err != nil {
@@ -28,19 +29,10 @@ func file_read(fname string) *bytes.Buffer {
 	}
 	return &b
 }
-
-func read_CAFEBABE(bu *bytes.Buffer) string {
-	a := bu.Next(1)
-	b := bu.Next(1)
-	c := bu.Next(1)
-	d := bu.Next(1)
-	return fmt.Sprintf("%X%X%X%X", a, b, c, d)
-}
 func read(b *bytes.Buffer, n int) []uint8 {
 	return b.Next(n)
 }
 func read_uint32(b *bytes.Buffer, n uint32) []uint8 {
-
 	var result []uint8
 	var i uint32
 	for i = 0; i < n; i++ {
@@ -53,7 +45,6 @@ func read_u1(b *bytes.Buffer) uint8 {
 	foo := b.Next(1)
 	return uint8(foo[0])
 }
-
 func read_u2(b *bytes.Buffer) uint16 {
 	bs := b.Next(2)
 	return binary.BigEndian.Uint16(bs)
@@ -61,6 +52,26 @@ func read_u2(b *bytes.Buffer) uint16 {
 func read_u4(b *bytes.Buffer) uint32 {
 	bs := b.Next(4)
 	return binary.BigEndian.Uint32(bs)
+}
+
+///// class file structure /////
+type ClassFile struct {
+	magic               []uint8   //uint32 //u4 magic;
+	minor_version       uint16    //u2 minor_version;
+	major_version       uint16    //u2 major_version;
+	constant_pool_count uint16    //u2 constant_pool_count;
+	constant_pool       []CP_INFO //cp_info constant_pool[constant_pool_count-1];
+	access_flags        uint16    //u2 access_flags;
+	this_class          uint16    //u2 this_class;
+	super_class         uint16    //u2 super_class;
+	interfaces_count    uint16    //u2 interfaces_count;
+	//u2 interfaces[interfaces_count];
+	fields_count uint16 //u2 fields_count;
+	//field_info fields[fields_count];
+	methods_count    uint16           //u2 methods_count;
+	method_info      []METHOD_INFO    //methods[methods_count];
+	attributes_count uint16           //u2 attributes_count;
+	attribute_info   []ATTRIBUTE_INFO //attributes[attributes_count];
 }
 
 type info struct {
@@ -74,6 +85,20 @@ type CP_INFO struct {
 	infos []info
 }
 
+type METHOD_INFO struct {
+	access_flags     uint16 //u2
+	name_index       uint16 //u2
+	descriptor_index uint16 //u2
+	attributes_count uint16 //u2
+	attribute_info   []ATTRIBUTE_INFO
+}
+type ATTRIBUTE_INFO struct {
+	attribute_name_index uint16  //u2
+	attribute_length     uint32  //u4
+	info                 []uint8 //u1
+}
+
+///// class file toString() /////
 func (cp CP_INFO) String() string {
 	str := fmt.Sprintf("<%s(%d) ", cp.name, cp.tag)
 	for _, i := range cp.infos {
@@ -84,6 +109,67 @@ func (cp CP_INFO) String() string {
 	} else {
 		return str + ">"
 	}
+}
+func (m METHOD_INFO) String() string {
+	result := "<"
+	result += "flags:" + str_access_flag(m.access_flags, "m_a_p") + " "
+	result += fmt.Sprintf("name_idx:%d ", m.name_index)
+	result += fmt.Sprintf("desc_idx:%d ", m.descriptor_index)
+	var i uint16 = 0
+	for i = 0; i < m.attributes_count; i++ {
+		result += fmt.Sprintf("attr[%d]:%s ", i, m.attribute_info[i])
+	}
+	return result + ">"
+}
+func (a ATTRIBUTE_INFO) String() string {
+	result := "<"
+	result += fmt.Sprintf("attribute_name_index:%d ", a.attribute_name_index)
+	for i := 0; i < len(a.info); i++ {
+		result += fmt.Sprintf("%02X ", a.info[i])
+	}
+	return result + ">"
+}
+
+///// read /////
+func read_class_file(b *bytes.Buffer) ClassFile {
+	var cf ClassFile
+	cf.magic = read_CAFEBABE(b)
+	cf.major_version = read_u2(b)
+	cf.minor_version = read_u2(b)
+	cf.constant_pool_count = read_u2(b)
+	cf.constant_pool = read_CP_INFO(b, cf.constant_pool_count)
+	cf.access_flags = read_u2(b)
+	cf.this_class = read_u2(b)
+	cf.super_class = read_u2(b)
+	cf.interfaces_count = read_u2(b)
+	if cf.interfaces_count != 0 {
+		panic("interface is not supported")
+	}
+	cf.fields_count = read_u2(b)
+	if cf.fields_count != 0 {
+		panic("field is not supported")
+	}
+	cf.methods_count = read_u2(b)
+	cf.method_info = read_METHOD_INFO(b, cf.methods_count)
+	cf.attributes_count = read_u2(b)
+	cf.attribute_info = read_ATTRIBUTE(b, cf.attributes_count)
+	return cf
+}
+func read_CAFEBABE(b *bytes.Buffer) []uint8 {
+	var result = []uint8{0, 0, 0, 0}
+	result[0] = read_u1(b)
+	result[1] = read_u1(b)
+	result[2] = read_u1(b)
+	result[3] = read_u1(b)
+	return result
+}
+func read_CP_INFO(b *bytes.Buffer, count uint16) []CP_INFO {
+	result := []CP_INFO{}
+	for i := uint16(1); i < count; i++ {
+		cp := read_cp(b)
+		result = append(result, cp)
+	}
+	return result
 }
 
 func read_cp(b *bytes.Buffer) CP_INFO {
@@ -147,55 +233,7 @@ func read_cp(b *bytes.Buffer) CP_INFO {
 	default:
 		panic(fmt.Sprintf("cp_info(%d)", cp.tag))
 	}
-
 	return cp
-}
-
-func read_CP_INFO(b *bytes.Buffer, count uint16) []CP_INFO {
-	result := []CP_INFO{}
-	for i := uint16(1); i < count; i++ {
-		cp := read_cp(b)
-		result = append(result, cp)
-	}
-	return result
-}
-
-func main() {
-	filename := "src/Hello.class"
-	b := file_read(filename)
-
-	fmt.Println("MAGIC:", read_CAFEBABE(b))
-	fmt.Println("MAJOR:", read_u2(b))
-	fmt.Println("NINOR:", read_u2(b))
-	cp := read_u2(b)
-	fmt.Println("CONSTANT_POOL:", cp)
-	cps := read_CP_INFO(b, cp)
-	for i := 0; i < len(cps); i++ {
-		fmt.Println("CPS:", i+1, cps[i])
-	}
-
-	acc_flags := read_u2(b)
-	fmt.Printf("%X\n", acc_flags)
-	fmt.Println("access_flags:", acc_flags, str_access_flag(acc_flags, "class"))
-	fmt.Println("this_class:", read_u2(b))
-	fmt.Println("super_class:", read_u2(b))
-	fmt.Println("interfaces_count:", read_u2(b))
-	// read_ifaces()
-	fmt.Println("fields_count:", read_u2(b))
-	// read_fields()
-	method_count := read_u2(b)
-	fmt.Println("methods_count:", method_count)
-	ms := read_METHOD_INFO(b, method_count)
-	for i := 0; i < len(ms); i++ {
-		fmt.Printf("method[%d]:%s\n", i, ms[i])
-	}
-	attributes_count := read_u2(b)
-	fmt.Println("attributes_count:", attributes_count)
-	as := read_ATTRIBUTE(b, attributes_count)
-	for i := 0; i < len(as); i++ {
-		fmt.Printf("attr[%d]:%s\n", i, as[i])
-	}
-	//fmt.Println(read_u2(b))
 }
 func read_METHOD_INFO(b *bytes.Buffer, count uint16) []METHOD_INFO {
 	result := []METHOD_INFO{}
@@ -205,7 +243,6 @@ func read_METHOD_INFO(b *bytes.Buffer, count uint16) []METHOD_INFO {
 	}
 	return result
 }
-
 func read_method(b *bytes.Buffer) METHOD_INFO {
 	var meth METHOD_INFO
 	meth.access_flags = read_u2(b)
@@ -215,7 +252,6 @@ func read_method(b *bytes.Buffer) METHOD_INFO {
 	meth.attribute_info = read_ATTRIBUTE(b, meth.attributes_count)
 	return meth
 }
-
 func read_ATTRIBUTE(b *bytes.Buffer, count uint16) []ATTRIBUTE_INFO {
 	result := []ATTRIBUTE_INFO{}
 	for i := uint16(0); i < count; i++ {
@@ -232,58 +268,30 @@ func read_attibute(b *bytes.Buffer) ATTRIBUTE_INFO {
 	return attr
 }
 
-type ClassFile struct {
-	magic               uint32 //u4 magic;
-	minor_version       uint16 //u2 minor_version;
-	major_version       uint16 //u2 major_version;
-	constant_pool_count uint16 //u2 constant_pool_count;
-	//constant_pool []CP_INFO		//cp_info constant_pool[constant_pool_count-1];
-	access_flags     uint16 //u2 access_flags;
-	this_class       uint16 //u2 this_class;
-	super_class      uint16 //u2 super_class;
-	interfaces_count uint16 //u2 interfaces_count;
-	// 				 									//u2 interfaces[interfaces_count];
-	fields_count uint16 //u2 fields_count;
-	//field_info fields[fields_count];
-	methods_count uint16 //u2 methods_count;
-	//method_info methods[methods_count];
-	attributes_count uint16 //u2 attributes_count;
-	//attribute_info attributes[attributes_count];
-}
-
-type METHOD_INFO struct {
-	access_flags     uint16 //u2
-	name_index       uint16 //u2
-	descriptor_index uint16 //u2
-	attributes_count uint16 //u2
-	attribute_info   []ATTRIBUTE_INFO
-}
-
-func (m METHOD_INFO) String() string {
-	result := "<"
-	result += "flags:" + str_access_flag(m.access_flags, "m_a_p") + " "
-	result += fmt.Sprintf("name_idx:%d ", m.name_index)
-	result += fmt.Sprintf("desc_idx:%d ", m.descriptor_index)
-	var i uint16 = 0
-	for i = 0; i < m.attributes_count; i++ {
-		result += fmt.Sprintf("attr[%d]:%s ", i, m.attribute_info[i])
+///// print  /////
+func print(cf ClassFile) {
+	fmt.Printf("MAGIC:%X%X%X%X\n", cf.magic[0], cf.magic[1], cf.magic[2], cf.magic[3])
+	fmt.Println("MAJOR:", cf.major_version)
+	fmt.Println("NINOR:", cf.minor_version)
+	fmt.Println("CONSTANT_POOL_COUNT:", cf.constant_pool_count)
+	for i := 0; i < len(cf.constant_pool); i++ {
+		fmt.Println("CONSTANT_POOL:", i+1, cf.constant_pool[i])
 	}
-	return result + ">"
-}
-
-type ATTRIBUTE_INFO struct {
-	attribute_name_index uint16  //u2
-	attribute_length     uint32  //u4
-	info                 []uint8 //u1
-}
-
-func (a ATTRIBUTE_INFO) String() string {
-	result := "<"
-	result += fmt.Sprintf("attribute_name_index:%d ", a.attribute_name_index)
-	for i := 0; i < len(a.info); i++ {
-		result += fmt.Sprintf("%02X ", a.info[i])
+	fmt.Println("access_flags:", cf.access_flags, str_access_flag(cf.access_flags, "class"))
+	fmt.Println("this_class:", cf.this_class)
+	fmt.Println("super_class:", cf.super_class)
+	fmt.Println("interfaces_count:", cf.interfaces_count)
+	// interface_info
+	fmt.Println("fields_count:", cf.fields_count)
+	// field_info
+	fmt.Println("methods_count:", cf.methods_count)
+	for i := 0; i < len(cf.method_info); i++ {
+		fmt.Printf("method[%d]:%s\n", i, cf.method_info[i])
 	}
-	return result + ">"
+	fmt.Println("attributes_count:", cf.attributes_count)
+	for i := 0; i < len(cf.attribute_info); i++ {
+		fmt.Printf("attr[%d]:%s\n", i, cf.attribute_info[i])
+	}
 }
 
 func str_access_flag(x uint16, opt string) string {
@@ -344,4 +352,12 @@ func str_access_flag(x uint16, opt string) string {
 		result += "varargs "
 	}
 	return result
+}
+
+///// main /////
+func main() {
+	filename := "src/Hello.class"
+	b := file_read(filename)
+	cf := read_class_file(b)
+	print(cf)
 }
