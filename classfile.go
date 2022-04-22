@@ -32,8 +32,8 @@ func file_read(fname string) *bytes.Buffer {
 func read(b *bytes.Buffer, n int) []uint8 {
 	return b.Next(n)
 }
-func read_uint32(b *bytes.Buffer, n uint32) []uint8 {
-	var result []uint8
+func read_uint32(b *bytes.Buffer, n uint32) []byte {
+	var result []byte
 	var i uint32
 	for i = 0; i < n; i++ {
 		x := b.Next(1)[0]
@@ -156,12 +156,7 @@ func read_class_file(b *bytes.Buffer) ClassFile {
 	return cf
 }
 func read_CAFEBABE(b *bytes.Buffer) []uint8 {
-	var result = []uint8{0, 0, 0, 0}
-	result[0] = read_u1(b)
-	result[1] = read_u1(b)
-	result[2] = read_u1(b)
-	result[3] = read_u1(b)
-	return result
+	return read(b, 4)
 }
 func read_CP_INFO(b *bytes.Buffer, count uint16) []CP_INFO {
 	result := []CP_INFO{}
@@ -354,10 +349,53 @@ func str_access_flag(x uint16, opt string) string {
 	return result
 }
 
+///// as []byte /////
+func u2_to_bytes(u uint16) []byte {
+	bytes := make([]byte, 4)
+	binary.BigEndian.PutUint16(bytes, u)
+	return bytes
+}
+func as_byte(cf ClassFile) []byte {
+	result := []byte{}
+	result = append(result, cf.magic...)
+	result = append(result, u2_to_bytes(cf.major_version)...)
+	result = append(result, u2_to_bytes(cf.minor_version)...)
+	result = append(result, u2_to_bytes(cf.constant_pool_count)...)
+	for i := 0; i < len(cf.constant_pool); i++ {
+		result = append(result, cf.constant_pool[i].tag)
+		for j := 0; j < len(cf.constant_pool[i].infos); j++ {
+			result = append(result, cf.constant_pool[i].infos[j].val...)
+		}
+	}
+	result = append(result, u2_to_bytes(cf.access_flags)...)
+	result = append(result, u2_to_bytes(cf.this_class)...)
+	result = append(result, u2_to_bytes(cf.super_class)...)
+	result = append(result, u2_to_bytes(cf.interfaces_count)...)
+	result = append(result, u2_to_bytes(cf.fields_count)...)
+	result = append(result, u2_to_bytes(cf.methods_count)...)
+	for i := 0; i < len(cf.method_info); i++ {
+		//under constructing
+	}
+
+	return result
+}
+
 ///// main /////
 func main() {
 	filename := "src/Hello.class"
 	b := file_read(filename)
 	cf := read_class_file(b)
 	print(cf)
+
+	fmt.Println("aaaaaaaaaaaaaaaaaaaaaaa")
+
+	u64 := uint64(12345)
+	bytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(bytes, u64)
+	fmt.Printf("%v\n", bytes)
+
+	bytes = []byte{0xCA, 0xFE, 0xBA, 0xBE}
+	u32 := binary.BigEndian.Uint32(bytes)
+	fmt.Printf("%X\n", u32)
+
 }
