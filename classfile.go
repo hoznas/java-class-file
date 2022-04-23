@@ -351,11 +351,11 @@ func str_access_flag(x uint16, opt string) string {
 
 ///// as []byte /////
 func u2_to_bytes(u uint16) []byte {
-	bytes := make([]byte, 4)
+	bytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(bytes, u)
 	return bytes
 }
-func as_byte(cf ClassFile) []byte {
+func (cf ClassFile) to_byte() []byte {
 	result := []byte{}
 	result = append(result, cf.magic...)
 	result = append(result, u2_to_bytes(cf.major_version)...)
@@ -374,28 +374,43 @@ func as_byte(cf ClassFile) []byte {
 	result = append(result, u2_to_bytes(cf.fields_count)...)
 	result = append(result, u2_to_bytes(cf.methods_count)...)
 	for i := 0; i < len(cf.method_info); i++ {
-		//under constructing
+		result = append(result, cf.method_info[i].to_byte()...)
 	}
-
+	result = append(result, u2_to_bytes(cf.attributes_count)...)
+	for i := 0; i < len(cf.attribute_info); i++ {
+		result = append(result, cf.attribute_info[i].to_byte()...)
+	}
+	return result
+}
+func (m METHOD_INFO) to_byte() []byte {
+	result := []byte{}
+	result = append(result, u2_to_bytes(m.access_flags)...)
+	result = append(result, u2_to_bytes(m.name_index)...)
+	result = append(result, u2_to_bytes(m.descriptor_index)...)
+	result = append(result, u2_to_bytes(m.attributes_count)...)
+	for i := 0; i < len(m.attribute_info); i++ {
+		result = append(result, m.attribute_info[i].to_byte()...)
+	}
+	return result
+}
+func (a ATTRIBUTE_INFO) to_byte() []byte {
+	result := []byte{}
+	result = append(result, u2_to_bytes(a.attribute_name_index)...)
+	bytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(bytes, a.attribute_length)
+	result = append(result, bytes...)
+	result = append(result, a.info...)
 	return result
 }
 
 ///// main /////
 func main() {
-	filename := "src/Hello.class"
+	filename := "Hello.class"
 	b := file_read(filename)
 	cf := read_class_file(b)
-	print(cf)
+	//print(cf)
 
-	fmt.Println("aaaaaaaaaaaaaaaaaaaaaaa")
-
-	u64 := uint64(12345)
-	bytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(bytes, u64)
-	fmt.Printf("%v\n", bytes)
-
-	bytes = []byte{0xCA, 0xFE, 0xBA, 0xBE}
-	u32 := binary.BigEndian.Uint32(bytes)
-	fmt.Printf("%X\n", u32)
+	bs := cf.to_byte()
+	os.Stdout.Write(bs)
 
 }
